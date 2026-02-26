@@ -3,22 +3,37 @@ from app.main import app
 
 client = TestClient(app)
 
-def test_create_case():
+def test_create_case_retruns_expected_shape():
     response = client.post("/api/cases", json={"title": "Test case"})
     assert response.status_code == 200
     data = response.json()
+
+    assert isinstance(data["id"], int)
     assert data["title"] == "Test case"
     assert data["status"] == "submitted"
-    assert "id" in data
+    assert isinstance(data["created_at"], str)
 
-def test_list_cases_retirns_list():
-    client.post("/api/cases", json={"title": "Another case"})
+def test_list_cases_contains_created_case():
+    created = client.post("/api/cases", json={"title": "Another case"}).json()
     response = client.get("/api/cases")
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) >= 1
 
-def test_get_case_not_found():
-    response = client.get("/api/cases/999999")
-    assert response.status_code == 404
+    ids = [c["id"] for c in data]
+    assert created["id"] in ids
+
+def test_get_case_not_found_returns_404():
+    res = client.get("/api/cases/999999")
+    assert res.status_code == 404
+    assert res.json()["detail"] == "Case not found"
+
+def test_update_case_status_invalid_value_returns_422():
+    created = client.post("/api/cases", json={"title": "Status test"}).json()
+    res = client.patch(f"/api/cases/{created['id']}/status", json={"status": "banana"})
+    assert res.status_code == 422
+
+def test_update_case_status_valid_value_updates_case():
+    created = client.post("/api/cases", json={"title": "Status ok"}).json()
+    res = client.patch(f"/api/cases/{created['id']}/status", json={"status": "processing"})
+    assert res.status_code == 200
+    assert res.json()["status"] == "processing"
